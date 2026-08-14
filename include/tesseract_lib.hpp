@@ -11,10 +11,12 @@ namespace TESSERACT {
     public:
         Tesseract();
         void Run();
+        void RunAll();
         int exit();
     private:
         std::string inputDir;
         std::string outputDir;
+        std::string logDir;
         std::string lang;
 
         void showMenu() const;
@@ -23,6 +25,7 @@ namespace TESSERACT {
         void processAllImages();
         std::vector<std::string> getImages() const;
         std::string getLogFilename() const;
+        std::string readTextFile(const std::string& path) const;
     };
 }
 

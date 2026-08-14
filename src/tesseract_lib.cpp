@@ -12,9 +12,10 @@ namespace fs = std::filesystem;
 
 namespace TESSERACT {
     Tesseract::Tesseract()
-        : inputDir("input"), outputDir("output"), lang("spa") {
+        : inputDir("input"), outputDir("output"), logDir("logs"), lang("spa") {
         fs::create_directories(inputDir);
         fs::create_directories(outputDir);
+        fs::create_directories(logDir);
     }
 
     std::vector<std::string> Tesseract::getImages() const {
@@ -34,6 +35,18 @@ namespace TESSERACT {
             }
         }
         return images;
+    }
+
+    std::string Tesseract::readTextFile(const std::string& path) const {
+        std::ifstream file(path);
+        if (!file.is_open()) return "";
+        std::ostringstream oss;
+        std::string line;
+        while (std::getline(file, line)) {
+            oss << line << "\n";
+        }
+        file.close();
+        return oss.str();
     }
 
     void Tesseract::listImages() const {
@@ -88,18 +101,14 @@ namespace TESSERACT {
         int result = std::system(command.c_str());
 
         if (result == 0) {
-            std::ifstream file(outputPath);
-            if (file.is_open()) {
-                std::string line;
+            std::string text = readTextFile(outputPath);
+            if (!text.empty()) {
                 std::cout << "----------------------------------------\n";
                 std::cout << "TEXTO EXTRAIDO:\n";
                 std::cout << "----------------------------------------\n";
-                while (std::getline(file, line)) {
-                    std::cout << line << "\n";
-                }
+                std::cout << text;
                 std::cout << "----------------------------------------\n";
                 std::cout << "Texto guardado en: " << outputPath << "\n";
-                file.close();
             } else {
                 std::cout << "Error: No se pudo abrir el archivo de salida.\n";
             }
@@ -125,20 +134,13 @@ namespace TESSERACT {
         }
 
         std::string logFilename = getLogFilename();
-        std::string logPath = outputDir + "/" + logFilename;
+        std::string logPath = logDir + "/" + logFilename;
 
         std::ofstream logFile(logPath);
         if (!logFile.is_open()) {
-            std::cout << "Error: No se pudo crear el archivo de log.\n";
+            std::cout << "Error: No se pudo crear el archivo de log en " << logDir << "/\n";
             return;
         }
-
-        auto now = std::time(nullptr);
-        auto tm = *std::localtime(&now);
-        logFile << "Inicio del procesamiento: "
-                << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << "\n";
-        logFile << "Total de imagenes: " << images.size() << "\n";
-        logFile << "========================================\n\n";
 
         std::cout << "\nProcesando " << images.size() << " imagenes...\n";
         std::cout << "Log: " << logPath << "\n\n";
@@ -151,40 +153,41 @@ namespace TESSERACT {
             std::string baseName = selectedImage.substr(0, selectedImage.find_last_of('.'));
             std::string outputPath = outputDir + "/" + baseName + ".txt";
 
-            std::cout << "[" << (i + 1) << "/" << images.size() << "] "
-                      << selectedImage << "\n";
+            std::cout << "[" << (i + 1) << "/" << images.size() << "] " << selectedImage << "\n";
 
             std::string command = "tesseract \"" + inputDir + "/" + selectedImage +
                                   "\" \"" + outputDir + "/" + baseName +
                                   "\" -l " + lang + " --psm 3 2>&1";
             int result = std::system(command.c_str());
 
-            logFile << "----------------------------------------\n";
-            logFile << "Archivo: " << selectedImage << "\n";
-            logFile << "Estado: " << (result == 0 ? "OK" : "ERROR") << "\n";
+            auto now = std::time(nullptr);
+            auto tm = *std::localtime(&now);
 
             if (result == 0) {
-                std::ifstream file(outputPath);
-                if (file.is_open()) {
-                    std::string line;
-                    while (std::getline(file, line)) {
-                        logFile << line << "\n";
-                    }
-                    file.close();
+                std::string text = readTextFile(outputPath);
+                if (!text.empty()) {
+                    logFile << "Archivo: " << selectedImage << "\n";
+                    logFile << "Fecha: " << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << "\n";
+                    logFile << "Texto extraido:\n";
+                    logFile << text << "\n";
                     processed++;
                 } else {
-                    logFile << "Error: No se pudo abrir el archivo de salida.\n";
+                    logFile << "Archivo: " << selectedImage << "\n";
+                    logFile << "Fecha: " << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << "\n";
+                    logFile << "Estado: ERROR - No se pudo leer el archivo de salida\n\n";
                     errors++;
                 }
             } else {
-                logFile << "Error al ejecutar Tesseract.\n";
+                logFile << "Archivo: " << selectedImage << "\n";
+                logFile << "Fecha: " << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << "\n";
+                logFile << "Estado: ERROR - Fallo Tesseract\n\n";
                 errors++;
             }
-            logFile << "\n";
         }
 
         auto endNow = std::time(nullptr);
         auto endTm = *std::localtime(&endNow);
+
         logFile << "========================================\n";
         logFile << "Fin del procesamiento: "
                 << std::put_time(&endTm, "%Y-%m-%d %H:%M:%S") << "\n";
@@ -239,6 +242,10 @@ namespace TESSERACT {
                 std::cout << "Opcion invalida. Intente nuevamente.\n";
             }
         }
+    }
+
+    void Tesseract::RunAll() {
+        processAllImages();
     }
 
     int Tesseract::exit() {
