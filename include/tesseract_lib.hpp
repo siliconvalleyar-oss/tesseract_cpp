@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <ctime>
 
 namespace TESSERACT {
     class Tesseract {
@@ -19,7 +20,9 @@ namespace TESSERACT {
         void showMenu() const;
         void listImages() const;
         void processImage();
+        void processAllImages();
         std::vector<std::string> getImages() const;
+        std::string getLogFilename() const;
     };
 }
 

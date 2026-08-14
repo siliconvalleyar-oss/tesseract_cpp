@@ -2,7 +2,10 @@
 #include <iostream>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <cctype>
+#include <ctime>
+#include <iomanip>
 #include <limits>
 
 namespace fs = std::filesystem;
@@ -106,13 +109,104 @@ namespace TESSERACT {
         }
     }
 
+    std::string Tesseract::getLogFilename() const {
+        auto now = std::time(nullptr);
+        auto tm = *std::localtime(&now);
+        std::ostringstream oss;
+        oss << "log_" << std::put_time(&tm, "%y%m%d%H%M%S") << ".log";
+        return oss.str();
+    }
+
+    void Tesseract::processAllImages() {
+        auto images = getImages();
+        if (images.empty()) {
+            std::cout << "No hay imagenes en la carpeta input/.\n";
+            return;
+        }
+
+        std::string logFilename = getLogFilename();
+        std::string logPath = outputDir + "/" + logFilename;
+
+        std::ofstream logFile(logPath);
+        if (!logFile.is_open()) {
+            std::cout << "Error: No se pudo crear el archivo de log.\n";
+            return;
+        }
+
+        auto now = std::time(nullptr);
+        auto tm = *std::localtime(&now);
+        logFile << "Inicio del procesamiento: "
+                << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << "\n";
+        logFile << "Total de imagenes: " << images.size() << "\n";
+        logFile << "========================================\n\n";
+
+        std::cout << "\nProcesando " << images.size() << " imagenes...\n";
+        std::cout << "Log: " << logPath << "\n\n";
+
+        int processed = 0;
+        int errors = 0;
+
+        for (size_t i = 0; i < images.size(); ++i) {
+            const auto& selectedImage = images[i];
+            std::string baseName = selectedImage.substr(0, selectedImage.find_last_of('.'));
+            std::string outputPath = outputDir + "/" + baseName + ".txt";
+
+            std::cout << "[" << (i + 1) << "/" << images.size() << "] "
+                      << selectedImage << "\n";
+
+            std::string command = "tesseract \"" + inputDir + "/" + selectedImage +
+                                  "\" \"" + outputDir + "/" + baseName +
+                                  "\" -l " + lang + " --psm 3 2>&1";
+            int result = std::system(command.c_str());
+
+            logFile << "----------------------------------------\n";
+            logFile << "Archivo: " << selectedImage << "\n";
+            logFile << "Estado: " << (result == 0 ? "OK" : "ERROR") << "\n";
+
+            if (result == 0) {
+                std::ifstream file(outputPath);
+                if (file.is_open()) {
+                    std::string line;
+                    while (std::getline(file, line)) {
+                        logFile << line << "\n";
+                    }
+                    file.close();
+                    processed++;
+                } else {
+                    logFile << "Error: No se pudo abrir el archivo de salida.\n";
+                    errors++;
+                }
+            } else {
+                logFile << "Error al ejecutar Tesseract.\n";
+                errors++;
+            }
+            logFile << "\n";
+        }
+
+        auto endNow = std::time(nullptr);
+        auto endTm = *std::localtime(&endNow);
+        logFile << "========================================\n";
+        logFile << "Fin del procesamiento: "
+                << std::put_time(&endTm, "%Y-%m-%d %H:%M:%S") << "\n";
+        logFile << "Procesadas: " << processed << " | Errores: " << errors << "\n";
+
+        logFile.close();
+
+        std::cout << "\n========================================\n";
+        std::cout << "Procesamiento completado.\n";
+        std::cout << "Procesadas: " << processed << " | Errores: " << errors << "\n";
+        std::cout << "Log guardado en: " << logPath << "\n";
+        std::cout << "========================================\n";
+    }
+
     void Tesseract::showMenu() const {
         std::cout << "\n========================================\n";
         std::cout << "   LECTOR DE IMAGENES - TESSERACT OCR   \n";
         std::cout << "========================================\n";
         std::cout << "1. Procesar imagen desde input/\n";
         std::cout << "2. Ver imagenes en input/\n";
-        std::cout << "3. Salir\n";
+        std::cout << "3. Procesar todas las imagenes\n";
+        std::cout << "4. Salir\n";
         std::cout << "----------------------------------------\n";
         std::cout << "Seleccione una opcion: ";
     }
@@ -137,6 +231,8 @@ namespace TESSERACT {
             } else if (option == 2) {
                 listImages();
             } else if (option == 3) {
+                processAllImages();
+            } else if (option == 4) {
                 std::cout << "Saliendo...\n";
                 break;
             } else {
