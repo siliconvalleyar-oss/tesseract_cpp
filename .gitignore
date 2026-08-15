@@ -4,3 +4,5 @@ output/
 reader_ocr
 *.o
 *.txt
+download/
+logs/
